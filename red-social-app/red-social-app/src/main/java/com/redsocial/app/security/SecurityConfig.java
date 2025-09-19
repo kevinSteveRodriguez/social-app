@@ -8,25 +8,42 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         // Deshabilita CSRF en desarrollo; si expones formularios, ajústalo
         http.csrf(csrf -> csrf.disable());
 
+        http.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
         http.authorizeHttpRequests(auth -> auth
-                // Permite libremente actuator básico (ajusta a tus necesidades)
+                // Health checks
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                // También conviene permitir los endpoints de auth
+                // Swagger/OpenAPI documentation
+                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/api-docs/**", "/v3/api-docs/**").permitAll()
+                // Authentication endpoints
                 .requestMatchers("/api/auth/**").permitAll()
-                // Permite todo el resto (para desarrollo). En prod, cambia a .authenticated()
-                .anyRequest().permitAll()
+                .requestMatchers("/api/auth/me").authenticated()
+                // Public endpoints
+                .requestMatchers("/api/posts", "/api/user-profiles/**").permitAll()
+                // Protected endpoints
+                .requestMatchers("/api/posts").authenticated()
+                .anyRequest().authenticated()
         );
 
-        // No configures login; al permitir todo, no será necesario
+        http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
         return http.build();
     }
 
