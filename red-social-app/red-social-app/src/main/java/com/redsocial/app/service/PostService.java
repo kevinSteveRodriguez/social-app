@@ -63,47 +63,35 @@ public class PostService {
     @Transactional(readOnly = true)
     public Page<PostResponse> listAll(Pageable pageable) {
         logger.debug("Listando todos los posts con paginación: {}", pageable);
-        
-        try {
-            validatePageable(pageable);
-            return postRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::toResponse);
-        } catch (Exception e) {
-            logger.error("Error al listar posts: ", e);
-            throw new PostException("Error interno al listar posts", e);
-        }
+    
+        Page<Post> page = postRepository.findAllWithUserProfile(pageable);
+        return page.map(this::toResponse);
     }
-
+    
     @Transactional(readOnly = true)
     public Page<PostResponse> listByUser(UUID userId, Pageable pageable) {
         logger.debug("Listando posts para usuario: {} con paginación: {}", userId, pageable);
-        
-        try {
-            validateUserId(userId);
-            validatePageable(pageable);
-            
-            return postRepository.findByUser_IdOrderByCreatedAtDesc(userId, pageable).map(this::toResponse);
-        } catch (ValidationException | PostException e) {
-            logger.warn("Error al listar posts para usuario {}: {}", userId, e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            logger.error("Error inesperado al listar posts para usuario {}: ", userId, e);
-            throw new PostException("Error interno al listar posts del usuario", e);
+    
+        Page<Post> page = postRepository.findByUserIdWithUserProfile(userId, pageable);
+        return page.map(this::toResponse);
+    }
+
+    private PostResponse toResponse(Post post) {
+        PostResponse resp = new PostResponse();
+        resp.setId(post.getId());
+        resp.setUserId(post.getUser().getId());
+        resp.setContent(post.getContent());
+        resp.setMediaUrl(post.getMediaUrl());
+        resp.setLikesCount(post.getLikesCount());
+        resp.setCommentsCount(post.getCommentsCount());
+        resp.setCreatedAt(post.getCreatedAt());
+        resp.setUpdatedAt(post.getUpdatedAt());
+        // Añadir alias de perfil
+        if (post.getUser() != null && post.getUser().getProfile() != null) {
+            resp.setAlias(post.getUser().getProfile().getAlias());
         }
+        return resp;
     }
-
-    private PostResponse toResponse(Post p) {
-        return new PostResponse(
-                p.getId(),
-                p.getUser() != null ? p.getUser().getId() : null,
-                p.getContent(),
-                p.getMediaUrl(),
-                p.getLikesCount(),
-                p.getCommentsCount(),
-                p.getCreatedAt(),
-                p.getUpdatedAt()
-        );
-    }
-
     /**
      * Valida el request de creación de post.
      */
